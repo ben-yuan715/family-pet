@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>家庭宠物系统 V13.1 勋章心愿版</title>
+    <style>
+        :root {
+            --primary-color: #6c5ce7;
+            --bg-dark: #0f0c29;
+            --card-bg: rgba(22, 33, 62, 0.85);
+            --gold: #f1c40f;
+            --cyan: #00cec9;
+            --wish-pink: #ff7675;
+            --text-light: #e9eaec;
+        }
+
+        body { 
+            font-family: 'PingFang SC', sans-serif; 
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e); 
+            color: var(--text-light); 
+            padding: 10px; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            min-height: 100vh;
+        }
+
+        .container { width: 100%; max-width: 800px; }
+
+        .pk-header { 
+            background: rgba(0,0,0,0.5); 
+            padding: 15px; border-radius: 20px; text-align: center; margin-bottom: 20px; 
+            border: 1px solid var(--primary-color);
+            box-shadow: 0 0 20px rgba(108, 92, 231, 0.4);
+        }
+
+        .player-card { 
+            background: var(--card-bg); border-radius: 25px; padding: 20px; margin-bottom: 25px; 
+            border: 2px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px);
+            position: relative;
+        }
+
+        /* 进化阶段特效 */
+        .stage-grown { border-color: var(--gold); box-shadow: 0 0 15px rgba(241, 196, 15, 0.4); }
+        .stage-awakened { border-color: #e84393; animation: breathing 2s infinite alternate; }
+        @keyframes breathing { from { box-shadow: 0 0 5px #e84393; } to { box-shadow: 0 0 25px #e84393; } }
+        .stage-phantom { border: 2px solid var(--cyan); background: linear-gradient(145deg, #16213e, #1a1a2e); }
+
+        .avatar-section { text-align: center; }
+        .avatar { font-size: 70px; margin: 10px 0; }
+        
+        /* 12枚勋章墙 */
+        .medal-wall {
+            display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px;
+            margin: 15px 0; padding: 12px; background: rgba(0,0,0,0.4); border-radius: 15px;
+        }
+        .medal {
+            font-size: 20px; aspect-ratio: 1/1; display: flex; align-items: center; justify-content: center;
+            background: #2d3436; border-radius: 50%; filter: grayscale(100%); opacity: 0.2;
+            transition: all 0.5s; position: relative;
+        }
+        .medal.unlocked { filter: grayscale(0%); opacity: 1; border: 1px solid var(--gold); box-shadow: 0 0 8px var(--gold); }
+        .medal-tip { display: none; position: absolute; bottom: -25px; background: #000; font-size: 9px; padding: 2px 4px; z-index: 10; border-radius: 4px; }
+        .medal:hover .medal-tip { display: block; }
+
+        /* 增强版数据条：新增心愿 */
+        .dashboard-stats { display: flex; justify-content: space-around; margin: 15px 0; }
+        .stat-item { text-align: center; }
+        .stat-value { font-size: 22px; font-weight: bold; color: var(--cyan); display: block; }
+        .wish-value { color: var(--wish-pink) !important; text-shadow: 0 0 10px rgba(255,118,117,0.5); cursor: pointer; }
+        
+        .stat-bar { height: 14px; background: #0f3460; border-radius: 7px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); }
+        .bar-fill { height: 100%; transition: width 0.6s; background: linear-gradient(90deg, #f1c40f, #f39c12); }
+
+        .task-list { background: rgba(0,0,0,0.2); padding: 15px; border-radius: 15px; margin: 15px 0; }
+        .task-item { display: flex; align-items: center; margin: 8px 0; font-size: 15px; }
+        input[type="checkbox"] { transform: scale(1.5); margin-right: 12px; }
+
+        /* 完整统计表 */
+        .stats-table { width: 100%; margin-top: 20px; border-collapse: collapse; font-size: 12px; background: rgba(0,0,0,0.2); }
+        .stats-table th, .stats-table td { padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); text-align: left; }
+        .count-tag { color: var(--gold); font-weight: bold; }
+
+        .btn { width: 100%; padding: 15px; border: none; border-radius: 12px; cursor: pointer; font-weight: bold; font-size: 16px; margin-top: 10px; }
+        .btn-submit { background: linear-gradient(90deg, #00b894, #00cec9); color: white; }
+        .btn-punish { background: transparent; color: #ff7675; border: 1px solid #ff7675; font-size: 12px; opacity: 0.6; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="pk-header" id="pkInfo">正在同步勋章与心愿...</div>
+    <div id="players-wrapper"></div>
+</div>
+
+<script>
+    const config = {
+        p1: {
+            name: '姐姐',
+            tasks: [
+                {id:'p1_t1', n:'按时去写作业', e:7}, {id:'p1_t2', n:'完成课外作业', e:7}, {id:'p1_t3', n:'英语打卡', e:4},
+                {id:'p1_t4', n:'语文打卡', e:4}, {id:'p1_t5', n:'新概念学习15分钟', e:6}, {id:'p1_t6', n:'认真整理书包', e:4},
+                {id:'p1_t7', n:'收拾桌面', e:4}, {id:'p1_t8', n:'收拾房间', e:5, type:'clean'}, {id:'p1_t9', n:'认真刷牙洗脸', e:4},
+                {id:'p1_t10', n:'做事自觉', e:5}
+            ]
+        },
+        p2: {
+            name: '弟弟',
+            tasks: [
+                {id:'p2_t1', n:'自己穿衣服', e:5}, {id:'p2_t2', n:'运动打卡', e:6}, {id:'p2_t3', n:'阅读打卡', e:6},
+                {id:'p2_t4', n:'控制零食', e:5}, {id:'p2_t5', n:'认真刷牙', e:4}, {id:'p2_t6', n:'早饭认真吃', e:5},
+                {id:'p2_t7', n:'晚饭认真吃', e:5}, {id:'p2_t8', n:'洗澡自己找衣服', e:4}, {id:'p2_t9', n:'整理玩后的玩具', e:5, type:'clean'},
+                {id:'p2_t10', n:'收拾家务', e:5}
+            ]
+        }
+    };
+
+    const medals = [
+        {n:'自律达人', i:'🏆', t:'单日全勤'}, {n:'三日之火', i:'🔥', t:'连续3天全勤'}, {n:'七日神话', i:'⚡', t:'连续7天全勤'},
+        {n:'整理专家', i:'🧹', t:'累计收拾20次'}, {n:'专项模范', i:'📚', t:'核心习惯达标'}, {n:'运动健将', i:'🏃', t:'运动累计20次'},
+        {n:'积分富翁', i:'💰', t:'积分突破1000'}, {n:'习惯卫士', i:'🛡️', t:'任务总数破100'}, {n:'破茧成蝶', i:'🦋', t:'达到10级'},
+        {n:'觉醒之光', i:'✨', t:'达到20级'}, {n:'幻兽契约', i:'🦄', t:'达到30级'}, {n:'传说见证', i:'👑', t:'达到40级'}
+    ];
+
+    let players = JSON.parse(localStorage.getItem('petGameV13_1')) || {
+        p1: { lvl:1, exp:0, score:0, history:{}, medals:[], streak:0, lastDate:'', wishes:0 },
+        p2: { lvl:1, exp:0, score:0, history:{}, medals:[], streak:0, lastDate:'', wishes:0 }
+    };
+
+    // 数据迁移：确保旧数据包含wishes字段
+    ['p1','p2'].forEach(id => { if(players[id].wishes === undefined) players[id].wishes = 0; });
+
+    function save() { localStorage.setItem('petGameV13_1', JSON.stringify(players)); render(); }
+
+    function render() {
+        const wrapper = document.getElementById('players-wrapper');
+        wrapper.innerHTML = '';
+
+        ['p1', 'p2'].forEach(pId => {
+            const p = players[pId];
+            const conf = config[pId];
+            
+            let stageClass = '';
+            let avatar = pId === 'p1' ? '🐱' : '🐶';
+            if(p.lvl >= 40) { stageClass='stage-phantom'; avatar='👑'; }
+            else if(p.lvl >= 20) { stageClass='stage-awakened'; avatar=pId==='p1'?'🦄':'🐺'; }
+            else if(p.lvl >= 10) { stageClass='stage-grown'; avatar=pId==='p1'?'🐯':'🦁'; }
+
+            const cardHtml = `
+                <div class="player-card ${stageClass}">
+                    <div class="avatar-section">
+                        <div style="font-size:22px; font-weight:bold; color:var(--gold);">${conf.name} <small>Lv.${p.lvl}</small></div>
+                        <div class="avatar">${avatar}</div>
+                        
+                        <div class="medal-wall">
+                            ${medals.map(m => `
+                                <div class="medal ${p.medals.includes(m.n)?'unlocked':''}">
+                                    ${m.i}<span class="medal-tip">${m.n}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+
+                        <div class="dashboard-stats">
+                            <div class="stat-item"><span class="stat-value" onclick="spendScore('${pId}')">${p.score}</span>积分</div>
+                            <div class="stat-item"><span class="stat-value wish-value" onclick="spendWish('${pId}')">${p.wishes}</span>✨心愿点</div>
+                        </div>
+
+                        <div style="font-size:12px; margin-bottom:5px;">经验进度: ${p.exp}/100</div>
+                        <div class="stat-bar"><div class="bar-fill" style="width:${p.exp}%"></div></div>
+                    </div>
+
+                    <div class="task-list">
+                        <label style="color:var(--gold);"><input type="checkbox" id="${pId}-all" onclick="toggleAll('${pId}')"> <b>今日全选</b></label>
+                        <hr style="opacity:0.1">
+                        ${conf.tasks.map(t => `
+                            <div class="task-item">
+                                <input type="checkbox" class="${pId}-ck" data-id="${t.id}" data-exp="${t.e}">
+                                <span>${t.n} (+${t.e})</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <button class="btn btn-submit" onclick="submit('${pId}')">提交成果</button>
+
+                    <div style="margin-top:20px;">
+                        <div style="color:var(--gold); font-size:13px; margin-bottom:8px;">📊 习惯全量追踪表：</div>
+                        <table class="stats-table">
+                            ${conf.tasks.map(t => `
+                                <tr><td>${t.n}</td><td class="count-tag">${p.history[t.id] || 0}次</td></tr>
+                            `).join('')}
+                        </table>
+                    </div>
+                    <button class="btn btn-punish" onclick="punish('${pId}')">家长锁</button>
+                </div>
+            `;
+            wrapper.innerHTML += cardHtml;
+        });
+
+        const p1Total = players.p1.lvl * 100 + players.p1.exp;
+        const p2Total = players.p2.lvl * 100 + players.p2.exp;
+        document.getElementById('pkInfo').innerHTML = p1Total >= p2Total ? "🏆 姐姐领先中" : "🏆 弟弟领先中";
+    }
+
+    function toggleAll(pId) {
+        const checked = document.getElementById(`${pId}-all`).checked;
+        document.querySelectorAll(`.${pId}-ck`).forEach(ck => ck.checked = checked);
+    }
+
+    function submit(pId) {
+        const cks = document.querySelectorAll(`.${pId}-ck`);
+        let earned = 0;
+        let checkedCount = 0;
+
+        cks.forEach(ck => {
+            if(ck.checked) {
+                earned += parseInt(ck.dataset.exp);
+                players[pId].history[ck.dataset.id] = (players[pId].history[ck.dataset.id] || 0) + 1;
+                checkedCount++;
+                ck.checked = false;
+            }
+        });
+
+        if(earned === 0) return alert("请先勾选完成的任务！");
+
+        const oldMedalCount = players[pId].medals.length;
+        players[pId].exp += earned;
+        players[pId].score += earned;
+
+        // 检查勋章与联动心愿点 [1]
+        checkMedals(pId, checkedCount);
+        
+        // 核心心愿逻辑：勋章数每增加且能被3整除，增加心愿
+        const newMedalCount = players[pId].medals.length;
+        if(newMedalCount > oldMedalCount && newMedalCount % 3 === 0) {
+            players[pId].wishes += 1;
+            alert(`💖 恭喜！已集齐 ${newMedalCount} 枚勋章，额外获得 1 个超级心愿！`);
+        }
+
+        // 升级逻辑 [4, 5]
+        while(players[pId].exp >= 100) {
+            players[pId].lvl++;
+            players[pId].exp -= 100;
+            players[pId].score += 50; 
+            alert(`🎉 升级啦！Lv.${players[pId].lvl} 达成！获得 50 积分红包！`);
+        }
+
+        document.getElementById(`${pId}-all`).checked = false;
+        save();
+    }
+
+    function checkMedals(pId, checkedCount) {
+        const p = players[pId];
+        // 全勤类
+        if(checkedCount === 10) {
+            if(!p.medals.includes('自律达人')) p.medals.push('自律达人');
+            const today = new Date().toLocaleDateString();
+            if(p.lastDate !== today) {
+                p.streak = (p.lastDate === new Date(Date.now()-86400000).toLocaleDateString()) ? p.streak+1 : 1;
+                p.lastDate = today;
+            }
+            if(p.streak >= 3 && !p.medals.includes('三日之火')) p.medals.push('三日之火');
+            if(p.streak >= 7 && !p.medals.includes('七日神话')) p.medals.push('七日神话');
+        }
+        // 统计类
+        let total = 0; Object.values(p.history).forEach(v => total += v);
+        if(total >= 100 && !p.medals.includes('习惯卫士')) p.medals.push('习惯卫士');
+        if(p.lvl >= 10 && !p.medals.includes('破茧成蝶')) p.medals.push('破茧成蝶');
+        if(p.lvl >= 20 && !p.medals.includes('觉醒之光')) p.medals.push('觉醒之光');
+        if(p.lvl >= 40 && !p.medals.includes('传说见证')) p.medals.push('传说见证');
+    }
+
+    function spendWish(pId) {
+        if(players[pId].wishes <= 0) return alert("心愿点不足，去多赢几枚勋章吧！");
+        if(prompt("家长确认：请输入密码核销心愿点") === "123") {
+            players[pId].wishes--;
+            alert("✨ 心愿已兑换！记得给宝贝兑现承诺哦！");
+            save();
+        }
+    }
+
+    function spendScore(pId) {
+        if(prompt("家长确认：请输入密码核销积分") === "123") {
+            const val = parseInt(prompt("扣除积分量：", "100"));
+            if(val > 0) { players[pId].score = Math.max(0, players[pId].score - val); save(); }
+        }
+    }
+
+    function punish(pId) {
+        if(prompt("家长管理锁：") === "123") {
+            const loss = parseInt(prompt("扣积分：", "50"));
+            players[pId].score = Math.max(0, players[pId].score - loss);
+            if(confirm("是否执行降级？")) { players[pId].lvl = Math.max(1, players[pId].lvl - 1); players[pId].exp = 0; }
+            save();
+        }
+    }
+
+    render();
+</script>
+</body>
+</html>
